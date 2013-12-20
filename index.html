@@ -1,0 +1,114 @@
+<!doctype html>
+<html>
+<head>
+    <title>Websocket demo</title>
+    <script src="http://code.jquery.com/jquery-1.9.1.min.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/underscore.js/1.4.3/underscore-min.js"></script>
+    <script>
+    $(document).ready(function() {
+        var $container = $("#container");
+        var mouseId;
+        var ws = new WebSocket("ws://roessland.com:54567");
+        var $ws = $(ws);
+        
+        $ws.on("close", function(e) { console.log("Websocket disconnected!"); });
+        $ws.on("error", function(e) { console.log("Error with websocket!" + e.originalEvent.data); });
+
+        // When websocket is ready, add event handler for sending mouse position
+        $ws.on("open", function(e) {
+            console.log("Connected to websocket!"); 
+            $(document).on("mousemove", _.throttle(function(eMouse) {
+                var pos = toLocalCoords($container, eMouse.pageX, eMouse.pageY);
+                ws.send(pos.x + " " + pos.y);
+            }, 10));
+        });
+
+        // Receive messages and parse them
+        $ws.on("message", function(e) { 
+            var data = e.originalEvent.data.split(" ");
+            switch (data[0]) {
+                case "move":
+                    movePointer(data[1], parseInt(data[2]), parseInt(data[3]));
+                    break;
+                case "del":
+                    delPointer(data[1]);
+                    break;
+                default:
+                    console.log("Unrecognized command: " + data[0]);
+                    break;
+            }
+        });
+
+        // Create pointer if missing, then set pointer position.
+        function movePointer(mid, posX, posY) {
+            var $pointer;
+            $pointer = $("#" + mid);
+            if ($pointer.length == 0) {
+                $pointer = $('<div class="pointer" id="'+mid+'"/>', {
+                    
+                }).appendTo("body");
+            }
+
+            var pos = toGlobalCoords($container, posX, posY);
+            $pointer.css({
+                'left': pos.x + 'px',
+                'top':  pos.y + 'px'
+            });
+        }
+
+        // Delete pointer if disconnected
+        function delPointer(mid) {
+            $("#" + mid).remove();
+        }
+
+        // Transform coords relative to $elem to global coords
+        function toGlobalCoords($elem, relX, relY) {
+            var offset = $elem.offset();
+            return {
+                'x': relX + Math.round(offset.left),
+                'y': relY + Math.round(offset.top)
+            }
+        }
+        // Transform global coords to coords relative to $elem
+        function toLocalCoords($elem, posX, posY) {
+            var offset = $elem.offset();
+            return {
+                'x': posX - Math.round(offset.left),
+                'y': posY - Math.round(offset.top)
+            }
+        }
+    });
+
+    </script>
+
+    <style>
+        
+    .pointer {
+        position: absolute;
+        background-image: url(mouse.png);
+        width: 16px;
+        height: 16px;
+    }
+
+    #container {
+        width: 800px;
+        margin: auto;
+    }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <h1>Social mouse pointers with Go and websockets</h1>
+
+        <p><b>If other people are visiting this page, you will see their mouse
+            pointers moving around in real-time.</b></p>
+
+        <p><b>Technical details:</b></p>
+        <ul>
+            <li>Websocket server made in <b>Go</b> (golang)</li>
+            <li>jQuery and Underscore.js are used on the client side.</li>
+        </ul>
+
+    </div>
+</body>
+</html>
